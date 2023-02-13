@@ -7,13 +7,13 @@
 * Tips
     - Regular expression online tester: https://pythex.org/
 
+## Overview
+![overview](./assets/overview.png)
+
 ## Command line
 ```
 python main_scrape_and_remove_stop_phrases.py --start_mmddyyyy "09/01/2022" --end_mmddyyyy "11/09/2022"
 ```
-
-## Overview
-![overview](./assets/overview.png)
 
 ### Input
 | Variable           | Type | Example                                                             |
