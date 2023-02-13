@@ -1,4 +1,4 @@
-# Collect FOMC Statements
+# Collecting FOMC Statements and Eliminating Stop-phrases
 
 * Reference
     - Scraping: https://github.com/tengtengtengteng/Webscraping-FOMC-Statements
