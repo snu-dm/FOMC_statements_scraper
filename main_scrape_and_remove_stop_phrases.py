@@ -11,15 +11,50 @@ import requests
 parser = argparse.ArgumentParser()
 parser.add_argument('--start_mmddyyyy', type=str, default="01/01/1990")
 parser.add_argument('--end_mmddyyyy', type=str, default="11/17/2022")
+parser.add_argument('--insert_into_NRFDB', type=lambda x: (str(x).lower() == 'true'), default=False)
 args = parser.parse_args()
 
 start_mmddyyyy = args.start_mmddyyyy
 end_mmddyyyy = args.end_mmddyyyy
+insert_into_NRFDB = args.insert_into_NRFDB
 
 selenium_filepath = "C:\GIT\SELENIUM_DRIVERS\chromedriver_win32\chromedriver.exe"
 save_root_dir = './Statements'
 
 url = "https://www.federalreserve.gov/monetarypolicy/materials/"
+
+
+###########################################################################
+#  DATABASE SETTING # START
+###########################################################################
+import pandas as pd
+from sqlalchemy import create_engine, select, delete, insert, update
+import config
+from schemas import statements
+
+#Create Engine
+engine = create_engine(f'postgresql://{config.user}:{config.pw}@{config.host}:{config.port}/{config.db}')
+
+#Make connection
+con = engine.connect()
+
+def insert_row_into_statements(document_date, meeting_date, document):
+    transactions = con.begin()
+
+    insert_query = insert(statements).values(
+        path='disclosures/FOMC/{}/{}.txt'.format(document_date[:4], document_date),
+        organization = 'FOMC',
+        documentdate = document_date,
+        meetingdate = meeting_date,
+        document = document
+    )
+
+    con.execute(insert_query)
+    transactions.commit()
+
+###########################################################################
+#  DATABASE SETTING # END
+###########################################################################
 
 def prepare_resources_for_scraping(selenium_filepath, url, start_mmddyyyy, end_mmddyyyy):
     driver = webdriver.Chrome(selenium_filepath)
@@ -147,6 +182,16 @@ if __name__ == '__main__':
             
         # Remove stop-phrases
         doc = remove_stop_phrases(doc)
+        
+        ###########################################################################
+        #  INSERT INTO DATABASE # START
+        ###########################################################################
+        if insert_into_NRFDB:
+            insert_row_into_statements(document_date_yyyymmdd, meeting_date, doc)
+        
+        ###########################################################################
+        #  INSERT INTO DATABASE # END
+        ###########################################################################
         
         # Save data
         save_dir = os.path.join(save_root_dir, 'no_stop-phrases', document_date_yyyymmdd[:4])
