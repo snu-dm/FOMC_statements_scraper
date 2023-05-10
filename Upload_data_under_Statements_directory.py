@@ -1,16 +1,15 @@
 import pandas as pd
 from sqlalchemy import create_engine, select, delete, insert, update
 import config
-
 import dateutil.parser
 import os
 from glob import glob
 from tqdm import tqdm
+from schemas import statements
 
 #Create Engine
 engine = create_engine(f'postgresql://{config.user}:{config.pw}@{config.host}:{config.port}/{config.db}')
 
-from schemas import statements
 
 # save_temp_dir = './temp'
 # if not os.path.exists(save_temp_dir): os.makedirs(save_temp_dir)
