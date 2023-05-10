@@ -10,8 +10,6 @@ from tqdm import tqdm
 #Create Engine
 engine = create_engine(f'postgresql://{config.user}:{config.pw}@{config.host}:{config.port}/{config.db}')
 
-metadata.create_all(bind=engine)
-
 from schemas import statements
 
 # save_temp_dir = './temp'
