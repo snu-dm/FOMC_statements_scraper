@@ -1,3 +1,6 @@
 selenium
 sqlalchemy
 psycopg2
+pyarrow
+fastparquet
+minio
