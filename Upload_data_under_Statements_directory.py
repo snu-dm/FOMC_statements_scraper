@@ -10,7 +10,6 @@ from schemas import statements
 #Create Engine
 engine = create_engine(f'postgresql://{config.user}:{config.pw}@{config.host}:{config.port}/{config.db}')
 
-
 # save_temp_dir = './temp'
 # if not os.path.exists(save_temp_dir): os.makedirs(save_temp_dir)
 
