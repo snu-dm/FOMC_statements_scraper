@@ -7,6 +7,8 @@ from tqdm import tqdm
 tqdm.pandas()
 import pandas as pd
 import requests
+from daterangeparser import parse
+from selenium.webdriver.chrome.options import Options
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--start_mmddyyyy', type=str, default="01/01/1990")
@@ -35,29 +37,38 @@ from schemas import statements
 #Create Engine
 engine = create_engine(f'postgresql://{config.user}:{config.pw}@{config.host}:{config.port}/{config.db}')
 
-#Make connection
-con = engine.connect()
+def extract_begin_end_dates(date_range):
+    if '-' not in date_range:
+        parsed, _ = parse(date_range)
+        return parsed, parsed
+    
+    elif '/' in date_range:
+        begin_month, end_month, begin_date, end_date, year = date_range.replace(',', '').replace('-', ' ').replace('/', ' ').split(' ')
+        date_range = f'{begin_month} {begin_date}-{end_month} {end_date}, {year}'
+        return parse(date_range)
+        
+    else:
+        return parse(date_range)
 
-def insert_row_into_statements(document_date, meeting_date, document):
-    transactions = con.begin()
-
+def get_insert_query(document_date, meeting_date_start, meeting_date_end):
     insert_query = insert(statements).values(
-        path='disclosures/FOMC/{}/{}.txt'.format(document_date[:4], document_date),
+        path='disclosures/FOMC/{}/{}.parquet'.format(document_date[:4], document_date),
         organization = 'FOMC',
         documentdate = document_date,
-        meetingdate = meeting_date,
-        document = document
+        meetingdate_start = meeting_date_start,
+        meetingdate_end = meeting_date_end
     )
-
-    con.execute(insert_query)
-    transactions.commit()
+    return insert_query
 
 ###########################################################################
 #  DATABASE SETTING # END
 ###########################################################################
 
 def prepare_resources_for_scraping(selenium_filepath, url, start_mmddyyyy, end_mmddyyyy):
-    driver = webdriver.Chrome(selenium_filepath)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    # chrome_options.headless = True # also works
+    driver = webdriver.Chrome(selenium_filepath, options=chrome_options)
     driver.get(url)
     time.sleep(5)
     
@@ -187,7 +198,28 @@ if __name__ == '__main__':
         #  INSERT INTO DATABASE # START
         ###########################################################################
         if insert_into_NRFDB:
-            insert_row_into_statements(document_date_yyyymmdd, meeting_date, doc)
+            with engine.connect() as con:
+                document_date = document_date_yyyymmdd
+                document = doc
+
+                transactions = con.begin()
+                try:
+                    meeting_date_start, meeting_date_end = extract_begin_end_dates(meeting_date)
+
+                    # PostgreSQL 
+                    insert_query = get_insert_query(document_date, meeting_date_start, meeting_date_end)
+                    con.execute(insert_query)
+
+                    # S3 (MINIO)
+            #         df = pd.DataFrame([(document_date, meeting_date_start, meeting_date_end, document)], \
+            #                           columns=['documentdate', 'meetingdate_start', 'meetingdate_end', 'document'])
+            #         save_filepath = os.path.join(save_temp_dir, '{}.parquet'.format(document_date))
+            #         df.to_parquet(save_filepath)
+
+                    transactions.commit()
+                except:
+                    print('Failed to INSERT data: {}'.format(statement_url))
+                    transactions.rollback()
         
         ###########################################################################
         #  INSERT INTO DATABASE # END
