@@ -2,6 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine, select, delete, insert, update
 import config
 import dateutil.parser
+from daterangeparser import parse
 import os
 from glob import glob
 from tqdm import tqdm
@@ -15,21 +16,17 @@ engine = create_engine(f'postgresql://{config.user}:{config.pw}@{config.host}:{c
 
 def extract_begin_end_dates(date_range):
     if '-' not in date_range:
-        return dateutil.parser.parse(date_range), dateutil.parser.parse(date_range)
-    else:
-        date_range = date_range.replace(',', '')
-        try:
-            month, dates, year = date_range.split(' ')
-            dates = dates.split('-')
-            begin_date = dateutil.parser.parse(' '.join([dates[0], month, year]))
-            end_date = dateutil.parser.parse(' '.join([dates[1], month, year]))
-        except:
-            date_range = date_range.replace('-', ' ')
-            begin_date_month, bigin_date_date, end_date_month, end_date_date, year = date_range.split(' ')
-            begin_date = dateutil.parser.parse(' '.join([bigin_date_date, begin_date_month, year]))
-            end_date = dateutil.parser.parse(' '.join([end_date_date, end_date_month, year]))
-        return begin_date, end_date
+        parsed, _ = parse(date_range)
+        return parsed, parsed
     
+    elif '/' in date_range:
+        begin_month, end_month, begin_date, end_date, year = date_range.replace(',', '').replace('-', ' ').replace('/', ' ').split(' ')
+        date_range = f'{begin_month} {begin_date}-{end_month} {end_date}, {year}'
+        return parse(date_range)
+        
+    else:
+        return parse(date_range)
+
 def get_insert_query(document_date, meeting_date_start, meeting_date_end):
     insert_query = insert(statements).values(
         path='disclosures/FOMC/{}/{}.parquet'.format(document_date[:4], document_date),
