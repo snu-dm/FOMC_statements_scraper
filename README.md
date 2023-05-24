@@ -1,5 +1,9 @@
 # Collecting FOMC Statements and Eliminating Stop-phrases
 
+* For additional information, please contact us using the email addresses provided below.
+    - jihyeparkk@bdai.snu.ac.kr 
+    - hjkim@bdai.snu.ac.kr
+
 * Reference
     - Scraping: https://github.com/tengtengtengteng/Webscraping-FOMC-Statements
     - Data source: https://www.federalreserve.gov/monetarypolicy/materials/
