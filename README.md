@@ -8,11 +8,11 @@
     - Regular expression online tester: https://pythex.org/
 
 ## Guidelines for SNU BDAI members only
-* **Chrome Driver**를 알맞은 버전으로 다운로드 받은 후 Chrome Driver의 파일 경로를 `main_scrape_and_remove_stop_phrases.py` 파일 내 `selenium_filepath`에 입력해주세요.
+* **Chrome Driver**를 알맞은 버전으로 다운로드 받은 후 Chrome Driver의 파일 경로를 `main_scrape_and_remove_stop_phrases.py` 파일 내 `chromedriver_filepath`에 입력해주세요.
 * `config.py` 파일에 정보를 입력하여 `main_scrape_and_remove_stop_phrases.py`와 같은 위치에 저장해주세요.
 * DB 적재를 위해 다음과 같은 커맨드를 실행해주세요. 
 ```bash
-python main_scrape_and_remove_stop_phrases.py --start_mmddyyyy "11/01/2022" --end_mmddyyyy "05/08/2023" --insert_into_NRFDB "True"
+python main_scrape_and_remove_stop_phrases.py --start_mmddyyyy "01/01/1994" --end_mmddyyyy "05/24/2023" --insert_into_NRFDB "True"
 ```
 
 ## Overview

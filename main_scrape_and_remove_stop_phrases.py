@@ -1,6 +1,5 @@
-import time, os, re, pickle, argparse
+import time, os, re, pickle, argparse, shutil
 from bs4 import BeautifulSoup
-from selenium import webdriver
 from datetime import datetime
 from glob import glob
 from tqdm import tqdm
@@ -8,11 +7,12 @@ tqdm.pandas()
 import pandas as pd
 import requests
 from daterangeparser import parse
+from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--start_mmddyyyy', type=str, default="01/01/1990")
-parser.add_argument('--end_mmddyyyy', type=str, default="11/17/2022")
+parser.add_argument('--start_mmddyyyy', type=str, default="01/01/1994")
+parser.add_argument('--end_mmddyyyy', type=str, default="01/01/2011")
 parser.add_argument('--insert_into_NRFDB', type=lambda x: (str(x).lower() == 'true'), default=False)
 args = parser.parse_args()
 
@@ -20,8 +20,9 @@ start_mmddyyyy = args.start_mmddyyyy
 end_mmddyyyy = args.end_mmddyyyy
 insert_into_NRFDB = args.insert_into_NRFDB
 
-selenium_filepath = "C:\GIT\SELENIUM_DRIVERS\chromedriver_win32\chromedriver.exe"
+chromedriver_filepath = "C:\GIT\SELENIUM_DRIVERS\chromedriver_win32\chromedriver.exe"
 save_root_dir = './Statements'
+save_temp_dir = './Temp'
 
 url = "https://www.federalreserve.gov/monetarypolicy/materials/"
 
@@ -33,9 +34,12 @@ import pandas as pd
 from sqlalchemy import create_engine, select, delete, insert, update
 import config
 from schemas import statements
+from minio import Minio
+from minio.error import S3Error
 
 #Create Engine
 engine = create_engine(f'postgresql://{config.user}:{config.pw}@{config.host}:{config.port}/{config.db}')
+client = Minio(config.minio_api_endpoint, access_key=config.user, secret_key=config.pw, secure=False)
 
 def extract_begin_end_dates(date_range):
     if '-' not in date_range:
@@ -50,9 +54,9 @@ def extract_begin_end_dates(date_range):
     else:
         return parse(date_range)
 
-def get_insert_query(document_date, meeting_date_start, meeting_date_end):
+def get_insert_query(document_date, meeting_date_start, meeting_date_end, path):
     insert_query = insert(statements).values(
-        path='disclosures/FOMC/{}/{}.parquet'.format(document_date[:4], document_date),
+        path=path,
         organization = 'FOMC',
         documentdate = document_date,
         meetingdate_start = meeting_date_start,
@@ -64,11 +68,10 @@ def get_insert_query(document_date, meeting_date_start, meeting_date_end):
 #  DATABASE SETTING # END
 ###########################################################################
 
-def prepare_resources_for_scraping(selenium_filepath, url, start_mmddyyyy, end_mmddyyyy):
+def prepare_resources_for_scraping(chromedriver_filepath, url, start_mmddyyyy, end_mmddyyyy):
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    # chrome_options.headless = True # also works
-    driver = webdriver.Chrome(selenium_filepath, options=chrome_options)
+    chrome_options.headless = True
+    driver = webdriver.Chrome(chromedriver_filepath, options=chrome_options)
     driver.get(url)
     time.sleep(5)
     
@@ -101,30 +104,32 @@ def prepare_resources_for_scraping(selenium_filepath, url, start_mmddyyyy, end_m
     
     return driver, pagination, largest_page
 
+def extract_meetingdate_documentdate_statementurl(soup):
+    meeting_date = soup.select('strong')[0].text
+    document_date = soup.select('em')[0].text
+    statement_url = 'https://www.federalreserve.gov/{}'.format([item for item in soup.select('a') if 'HTML' in item.text][0]['href'])
+    return meeting_date, document_date, statement_url
+
 def scrape_URLs_and_meeting_dates_and_document_dates(driver, pagination, largest_page):
-    statement_url_list, meeting_date_list, document_date_list = [], [], []
+    meeting_date_list, document_date_list, statement_url_list = [], [], []
     # go back to first page and start the loop
     first_page = pagination.find_element_by_link_text('First')
     first_page.click()
     next_page = pagination.find_element_by_link_text('Next')
-    for i in range(largest_page):
-        # now to get the items inside
-        main = driver.find_element_by_css_selector(".panel.panel-default") # get the app panel
-        material_types = main.find_elements_by_css_selector(".fomc-meeting__month.col-xs-5.col-sm-3.col-md-4") # get the 2nd col
-        material_types = [element.text for element in material_types] # to get the words
-        material_links = main.find_elements_by_css_selector(".fomc-meeting__month.col-xs-5.col-sm-3.col-md-2") # get the 3rd col
-        html_elements = [element.find_element_by_link_text('HTML') for element in material_links] # get the html ones
-        # add url to statement_url_list if it is a statement
-        statement_url_list.extend([html_elements[i].get_attribute('href') for i, j in enumerate(material_types) if j=='Statement'])
+    
+    for _ in range(largest_page):
+        driver.find_element_by_css_selector(".panel.panel-default") 
+        html = driver.page_source
+        soup = BeautifulSoup(html, "html.parser")
         
-        meeting_dates = main.find_elements_by_css_selector(".fomc-meeting__month.col-xs-5.col-sm-3.col-md-3 > strong")
-        meeting_dates = [element.text for element in meeting_dates] # to get the words
-        meeting_dates = meeting_dates[2:] # First two items correspond to table headings (i.e.,"Meeting date", "Document date")
-        meeting_date_list.extend([meeting_dates[i] for i, j in enumerate(material_types) if j=='Statement'])
-        
-        document_dates = main.find_elements_by_css_selector(".fomc-meeting__month.col-xs-5.col-sm-3.col-md-3 > em")
-        document_dates = [element.text for element in document_dates] # to get the words
-        document_date_list.extend([document_dates[i] for i, j in enumerate(material_types) if j=='Statement'])
+        rows = soup.select('div.row.fomc-meeting')[1:]
+        for one_row in rows:
+            if one_row.select('.fomc-meeting__month.col-xs-5.col-sm-3.col-md-4')[0].text.strip()=='Statement':
+                # Extract statements written in HTML format
+                meeting_date, document_date, statement_url = extract_meetingdate_documentdate_statementurl(one_row)
+                meeting_date_list.append(meeting_date)
+                document_date_list.append(document_date)
+                statement_url_list.append(statement_url)
         
         next_page.click()
     print('Number of URLs: {}'.format(len(statement_url_list)))
@@ -160,7 +165,7 @@ def remove_stop_phrases(document):
 
 if __name__ == '__main__':
     
-    driver, pagination, largest_page = prepare_resources_for_scraping(selenium_filepath, url, start_mmddyyyy, end_mmddyyyy)
+    driver, pagination, largest_page = prepare_resources_for_scraping(chromedriver_filepath, url, start_mmddyyyy, end_mmddyyyy)
     statement_url_list, meeting_date_list, document_date_list = scrape_URLs_and_meeting_dates_and_document_dates(driver, pagination, largest_page)
         
     doc_count = 0
@@ -205,16 +210,27 @@ if __name__ == '__main__':
                 transactions = con.begin()
                 try:
                     meeting_date_start, meeting_date_end = extract_begin_end_dates(meeting_date)
+                    meeting_date_start_string = meeting_date_start.strftime("%Y-%m-%d")
+                    meeting_date_end_string = meeting_date_end.strftime("%Y-%m-%d")
 
-                    # PostgreSQL 
-                    insert_query = get_insert_query(document_date, meeting_date_start, meeting_date_end)
+                    bucket_name = 'monetary-policy'
+                    minio_object_name = 'FOMC/Statements/{}/{}.parquet'.format(meeting_date_start_string[:4], meeting_date_start_string)
+                    path='{}/{}'.format(bucket_name, minio_object_name)
+                    
+                    # PostgreSQL
+                    insert_query = get_insert_query(document_date, meeting_date_start, meeting_date_end, path)
                     con.execute(insert_query)
 
                     # S3 (MINIO)
-            #         df = pd.DataFrame([(document_date, meeting_date_start, meeting_date_end, document)], \
-            #                           columns=['documentdate', 'meetingdate_start', 'meetingdate_end', 'document'])
-            #         save_filepath = os.path.join(save_temp_dir, '{}.parquet'.format(document_date))
-            #         df.to_parquet(save_filepath)
+                    df = pd.DataFrame([(document_date, meeting_date_start_string, meeting_date_end_string, document)], \
+                                      columns=['documentdate', 'meetingdate_start', 'meetingdate_end', 'document'])
+                    local_object_filepath = os.path.join(save_temp_dir, '{}.parquet'.format(document_date))
+                    if not os.path.exists(os.path.dirname(local_object_filepath)):
+                        os.makedirs(os.path.dirname(local_object_filepath))
+                    df.to_parquet(local_object_filepath)
+                    client.fput_object(
+                        bucket_name, minio_object_name, local_object_filepath,
+                    )
 
                     transactions.commit()
                 except:
@@ -233,6 +249,12 @@ if __name__ == '__main__':
             file.write("MEETING_DATE: {}\n".format(meeting_date))
             file.write(doc)
             doc_count += 1
+            
+    # To save memory, delete the directory in which the *.parquet files were saved.
+    try:
+        if os.path.exists(save_temp_dir):
+            shutil.rmtree(save_temp_dir)
+    except OSError as e: print("Error: %s - %s." % (e.filename, e.strerror))
             
     save_dir = '{}/{}'.format(save_root_dir, 'raw')
     print('Saved {} unique documents under {}'.format(len(glob('{}/*/*.txt'.format(save_dir))), save_dir)) 
