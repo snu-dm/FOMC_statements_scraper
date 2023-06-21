@@ -32,9 +32,9 @@ python main_scrape_and_remove_stop_phrases.py --start_mmddyyyy "09/01/2022" --en
 | :----------------- | :--- | :------------------------------------------------------------------ |
 | start\_mmddyyyy    | str  | "01/01/1990"                                                        |
 | end\_mmddyyyy      | str  | "11/17/2022"                                                        |
-| selenium\_filepath | str  | "C:\\GIT\\SELENIUM\_DRIVERS\\chromedriver\_win32\\chromedriver.exe" |
-| save\_root\_dir    | str  | "./Statements"                                                      |
 | insert\_into\_NRFDB      | str  | "False"                                                       |
+| chromedriver_filepath | str  | "C:\\GIT\\SELENIUM\_DRIVERS\\chromedriver\_win32\\chromedriver.exe" |
+| save\_root\_dir    | str  | "./Statements"                                                      |
 
 ### Output 
 * One text file contains information regarding a meeting date, document date, and document.
