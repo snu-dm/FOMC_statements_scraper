@@ -14,7 +14,7 @@
 ## Guidelines for SNU BDAI members only
 * **Chrome Driver**를 알맞은 버전으로 다운로드 받은 후 Chrome Driver의 파일 경로를 `main_scrape_and_remove_stop_phrases.py` 파일 내 `chromedriver_filepath`에 입력해주세요.
 * `config.py` 파일에 정보를 입력하여 `main_scrape_and_remove_stop_phrases.py`와 같은 위치에 저장해주세요.
-* `config.py`
+    * `config.py`
 ```bash
 dialect = ''
 host = ''
