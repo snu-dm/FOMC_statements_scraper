@@ -33,11 +33,6 @@ python main_scrape_and_remove_stop_phrases.py --start_mmddyyyy "01/01/1994" --en
 ## Overview
 ![overview](./assets/overview.png)
 
-## Command line
-```
-python main_scrape_and_remove_stop_phrases.py --start_mmddyyyy "09/01/2022" --end_mmddyyyy "11/09/2022"
-```
-
 ### Input
 | Variable           | Type | Example                                                             |
 | :----------------- | :--- | :------------------------------------------------------------------ |
